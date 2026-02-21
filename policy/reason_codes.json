@@ -1,0 +1,155 @@
+{
+  "domain": "financial_integrity",
+  "version": "1.0",
+  "last_updated": "2026-02-19",
+  "owner": "risk_strategy",
+  "review_cycle_days": 30,
+  "categories": [
+    {
+      "id": "investment_scam",
+      "label": "Investment Scam",
+      "violations": [
+        {
+          "code": "GUARANTEED_RETURN",
+          "category": "investment_scam",
+          "label": "Guaranteed Return Claim",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content promises guaranteed or risk-free financial returns",
+          "external_policy_mapping": "Integrity & Authenticity — Financial Harm"
+        },
+        {
+          "code": "URGENCY_PRESSURE",
+          "category": "investment_scam",
+          "label": "Urgency / Pressure Tactics",
+          "severity": "medium",
+          "risk_weight": 2,
+          "enforcement": "escalate_review",
+          "description": "Content uses time pressure or scarcity to push financial decisions",
+          "external_policy_mapping": null
+        },
+        {
+          "code": "FAKE_PROFIT_EVIDENCE",
+          "category": "investment_scam",
+          "label": "Fabricated Profit Evidence",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Screenshots or claims of returns that appear fabricated or unverifiable",
+          "external_policy_mapping": null
+        }
+      ]
+    },
+    {
+      "id": "impersonation_scam",
+      "label": "Impersonation Scam",
+      "violations": [
+        {
+          "code": "CELEBRITY_IMPERSONATION",
+          "category": "impersonation_scam",
+          "label": "Celebrity / Authority Impersonation",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content falsely attributes financial advice to known public figures",
+          "external_policy_mapping": "Integrity & Authenticity — Impersonation"
+        },
+        {
+          "code": "FAKE_INSTITUTION",
+          "category": "impersonation_scam",
+          "label": "Fake Financial Institution",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content impersonates banks, regulators, or licensed financial entities",
+          "external_policy_mapping": null
+        }
+      ]
+    },
+    {
+      "id": "contact_redirection",
+      "label": "Contact Redirection",
+      "violations": [
+        {
+          "code": "OFF_PLATFORM_MOVE",
+          "category": "contact_redirection",
+          "label": "Off-Platform Contact Push",
+          "severity": "medium",
+          "risk_weight": 2,
+          "enforcement": "escalate_review",
+          "description": "Content directs users to external platforms for financial transactions",
+          "external_policy_mapping": null
+        }
+      ]
+    },
+    {
+      "id": "crypto_pump",
+      "label": "Crypto Pump & Dump",
+      "violations": [
+        {
+          "code": "PUMP_SIGNAL",
+          "category": "crypto_pump",
+          "label": "Coordinated Pump Signal",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content promotes rapid buying of low-cap crypto with urgency signals",
+          "external_policy_mapping": null
+        },
+        {
+          "code": "UNDISCLOSED_PROMOTION",
+          "category": "crypto_pump",
+          "label": "Undisclosed Paid Promotion",
+          "severity": "medium",
+          "risk_weight": 2,
+          "enforcement": "escalate_review",
+          "description": "Content promotes crypto assets without disclosing financial interest",
+          "external_policy_mapping": null
+        }
+      ]
+    },
+    {
+      "id": "loan_fraud",
+      "label": "Loan Fraud",
+      "violations": [
+        {
+          "code": "FAKE_LOAN_OFFER",
+          "category": "loan_fraud",
+          "label": "Fake Loan / Credit Offer",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content offers loans with unrealistic terms or upfront fee requirements",
+          "external_policy_mapping": null
+        }
+      ]
+    },
+    {
+      "id": "job_offer_scam",
+      "label": "Job Offer Scam",
+      "violations": [
+        {
+          "code": "FAKE_JOB_OFFER",
+          "category": "job_offer_scam",
+          "label": "Fraudulent Employment Offer",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content offers fake jobs requiring upfront payment or personal data submission",
+          "external_policy_mapping": null
+        },
+        {
+          "code": "MONEY_MULE_RECRUITMENT",
+          "category": "job_offer_scam",
+          "label": "Money Mule Recruitment",
+          "severity": "high",
+          "risk_weight": 3,
+          "enforcement": "remove",
+          "description": "Content recruits individuals to transfer money on behalf of third parties",
+          "external_policy_mapping": "Integrity & Authenticity — Financial Harm"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,758 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Risk Evaluation Agent — Production Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #161a22;
+    --border: #1e2430;
+    --border-bright: #2a3448;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-muted: #374151;
+    --accent-gold: #f5c842;
+    --accent-orange: #f97316;
+    --accent-red: #ef4444;
+    --accent-blue: #3b82f6;
+    --accent-teal: #14b8a6;
+    --accent-purple: #a855f7;
+    --accent-green: #22c55e;
+    --grid: #0f1420;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Radial glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(245,200,66,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .canvas {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 32px 64px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 56px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(245,200,66,0.08);
+    border: 1px solid rgba(245,200,66,0.2);
+    color: var(--accent-gold);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    padding: 6px 14px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  .header-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent-gold);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  .header h1 {
+    font-size: clamp(24px, 4vw, 40px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .header h1 span { color: var(--accent-gold); }
+
+  .header p {
+    font-size: 14px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Main layout */
+  .arch {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Layer row */
+  .layer-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 0;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .layer-row:nth-child(1) { animation-delay: 0.1s; }
+  .layer-row:nth-child(2) { animation-delay: 0.2s; }
+  .layer-row:nth-child(3) { animation-delay: 0.3s; }
+  .layer-row:nth-child(4) { animation-delay: 0.4s; }
+  .layer-row:nth-child(5) { animation-delay: 0.5s; }
+
+  .layer-label {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 20px 0 0;
+    border-right: 1px solid var(--border-bright);
+    min-height: 90px;
+  }
+
+  .layer-name {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .layer-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+  }
+
+  .layer-content {
+    padding: 16px 0 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  /* Connector dots on label side */
+  .layer-label::after {
+    content: '';
+    position: absolute;
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--border-bright);
+    background: var(--bg);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 16px;
+    min-width: 130px;
+    position: relative;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: default;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-bright);
+  }
+
+  .card-icon {
+    font-size: 16px;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 3px;
+    white-space: nowrap;
+  }
+
+  .card-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .card-tag {
+    position: absolute;
+    top: -1px; right: -1px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border-radius: 0 4px 0 4px;
+    text-transform: uppercase;
+  }
+
+  /* Arrow between cards */
+  .arrow {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .arrow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .arrow-label span:first-child { font-size: 14px; }
+
+  /* Color themes per layer */
+  .layer-policy .layer-name { color: var(--accent-gold); }
+  .layer-policy .layer-label::after { border-color: var(--accent-gold); background: rgba(245,200,66,0.15); }
+  .layer-policy .card { border-color: rgba(245,200,66,0.15); }
+  .layer-policy .card:hover { border-color: rgba(245,200,66,0.4); box-shadow: 0 0 16px rgba(245,200,66,0.06); }
+  .layer-policy .card-tag { background: rgba(245,200,66,0.12); color: var(--accent-gold); }
+
+  .layer-prompt .layer-name { color: var(--accent-orange); }
+  .layer-prompt .layer-label::after { border-color: var(--accent-orange); background: rgba(249,115,22,0.15); }
+  .layer-prompt .card { border-color: rgba(249,115,22,0.15); }
+  .layer-prompt .card:hover { border-color: rgba(249,115,22,0.4); box-shadow: 0 0 16px rgba(249,115,22,0.06); }
+  .layer-prompt .card-tag { background: rgba(249,115,22,0.12); color: var(--accent-orange); }
+
+  .layer-agent .layer-name { color: var(--accent-red); }
+  .layer-agent .layer-label::after { border-color: var(--accent-red); background: rgba(239,68,68,0.15); }
+  .layer-agent .card { border-color: rgba(239,68,68,0.15); }
+  .layer-agent .card:hover { border-color: rgba(239,68,68,0.4); box-shadow: 0 0 16px rgba(239,68,68,0.06); }
+  .layer-agent .card-tag { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+
+  .layer-eval .layer-name { color: var(--accent-blue); }
+  .layer-eval .layer-label::after { border-color: var(--accent-blue); background: rgba(59,130,246,0.15); }
+  .layer-eval .card { border-color: rgba(59,130,246,0.15); }
+  .layer-eval .card:hover { border-color: rgba(59,130,246,0.4); box-shadow: 0 0 16px rgba(59,130,246,0.06); }
+  .layer-eval .card-tag { background: rgba(59,130,246,0.12); color: var(--accent-blue); }
+
+  .layer-dash .layer-name { color: var(--accent-teal); }
+  .layer-dash .layer-label::after { border-color: var(--accent-teal); background: rgba(20,184,166,0.15); }
+  .layer-dash .card { border-color: rgba(20,184,166,0.15); }
+  .layer-dash .card:hover { border-color: rgba(20,184,166,0.4); box-shadow: 0 0 16px rgba(20,184,166,0.06); }
+  .layer-dash .card-tag { background: rgba(20,184,166,0.12); color: var(--accent-teal); }
+
+  /* Vertical connector between layers */
+  .connector-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    height: 28px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .connector-line {
+    margin-left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .connector-line::before {
+    content: '';
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(to bottom, var(--border), var(--border-bright), var(--border));
+    margin-left: 20px;
+  }
+
+  .connector-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Bottom section — data flows */
+  .bottom-section {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    animation: fadeIn 0.5s ease 0.6s both;
+  }
+
+  .flow-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+  }
+
+  .flow-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .flow-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    border-radius: 2px;
+  }
+
+  .flow-panel:first-child .flow-title { color: var(--accent-purple); }
+  .flow-panel:first-child .flow-title::before { background: var(--accent-purple); }
+  .flow-panel:last-child .flow-title { color: var(--accent-green); }
+  .flow-panel:last-child .flow-title::before { background: var(--accent-green); }
+
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .flow-step:last-child { margin-bottom: 0; }
+
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .flow-panel:first-child .step-num {
+    background: rgba(168,85,247,0.12);
+    color: var(--accent-purple);
+    border: 1px solid rgba(168,85,247,0.2);
+  }
+
+  .flow-panel:last-child .step-num {
+    background: rgba(34,197,94,0.12);
+    color: var(--accent-green);
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+
+  .step-text {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .step-text strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* Key metrics strip */
+  .metrics-strip {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    animation: fadeIn 0.5s ease 0.7s both;
+  }
+
+  .metric-cell {
+    background: var(--surface);
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .metric-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">Production Architecture</div>
+    <h1>🛡️ LLM Risk <span>Evaluation Agent</span></h1>
+    <p>Financial Integrity · Prompt Versioning · Drift Monitoring · Streamlit Cloud</p>
+  </div>
+
+  <!-- Architecture layers -->
+  <div class="arch">
+
+    <!-- Layer 1: Policy -->
+    <div class="layer-row layer-policy">
+      <div class="layer-label" style="position:relative">
+        <div class="layer-name">Policy</div>
+        <div class="layer-num">Layer 01</div>
+      </div>
+      <div class="layer-content">
+        <div class="card">
+          <div class="card-tag">JSON</div>
+          <span class="card-icon">🧠</span>
+          <div class="card-title">reason_codes.json</div>
+          <div class="card-sub">6 categories<br>11 violation codes</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">MD</div>
+          <span class="card-icon">📋</span>
+          <div class="card-title">policy.md</div>
+          <div class="card-sub">Governance framework<br>human-readable</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">MD</div>
+          <span class="card-icon">⚖️</span>
+          <div class="card-title">severity_rubric.md</div>
+          <div class="card-sub">Enforcement logic<br>edge case handling</div>
+        </div>
+        <div class="arrow-label">
+          <span>↓</span>
+          <span>loaded at<br>runtime</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-row">
+      <div></div>
+      <div class="connector-line"><span class="connector-text">policy injected into prompt context</span></div>
+    </div>
+
+    <!-- Layer 2: Prompt -->
+    <div class="layer-row layer-prompt">
+      <div class="layer-label" style="position:relative">
+        <div class="layer-name">Prompt</div>
+        <div class="layer-num">Layer 02</div>
+      </div>
+      <div class="layer-content">
+        <div class="card">
+          <div class="card-tag">v1</div>
+          <span class="card-icon">📝</span>
+          <div class="card-title">v1_baseline.txt</div>
+          <div class="card-sub">Flat classification<br>enum constraints</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">v2</div>
+          <span class="card-icon">🔀</span>
+          <div class="card-title">v2_hierarchical.txt</div>
+          <div class="card-sub">4-step reasoning<br>structured chain</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag" style="background:rgba(249,115,22,0.25)">v3 ★</div>
+          <span class="card-icon">🎯</span>
+          <div class="card-title">v3_high_recall.txt</div>
+          <div class="card-sub">Recall-biased<br>implicit signals</div>
+        </div>
+        <div class="arrow-label">
+          <span>↓</span>
+          <span>built by<br>PromptBuilder</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-row">
+      <div></div>
+      <div class="connector-line"><span class="connector-text">prompt + content → LLMClient → Anthropic API</span></div>
+    </div>
+
+    <!-- Layer 3: Agent -->
+    <div class="layer-row layer-agent">
+      <div class="layer-label" style="position:relative">
+        <div class="layer-name">Agent</div>
+        <div class="layer-num">Layer 03</div>
+      </div>
+      <div class="layer-content">
+        <div class="card">
+          <div class="card-tag">PY</div>
+          <span class="card-icon">🔌</span>
+          <div class="card-title">llm_client.py</div>
+          <div class="card-sub">Anthropic / OpenAI<br>retry + backoff</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">PY</div>
+          <span class="card-icon">🏗️</span>
+          <div class="card-title">prompt_builder.py</div>
+          <div class="card-sub">Template loader<br>placeholder inject</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">PY</div>
+          <span class="card-icon">🤖</span>
+          <div class="card-title">agent.py</div>
+          <div class="card-sub">Parse + validate<br>fail-safe defaults</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">PY</div>
+          <span class="card-icon">🧩</span>
+          <div class="card-title">schema.py</div>
+          <div class="card-sub">AgentOutput<br>typed dataclass</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-row">
+      <div></div>
+      <div class="connector-line"><span class="connector-text">AgentOutput → evaluator → JSONL audit log</span></div>
+    </div>
+
+    <!-- Layer 4: Evaluation -->
+    <div class="layer-row layer-eval">
+      <div class="layer-label" style="position:relative">
+        <div class="layer-name">Evaluation</div>
+        <div class="layer-num">Layer 04</div>
+      </div>
+      <div class="layer-content">
+        <div class="card">
+          <div class="card-tag">JSONL</div>
+          <span class="card-icon">🗃️</span>
+          <div class="card-title">gold_cases.jsonl</div>
+          <div class="card-sub">300 cases<br>60% violation</div>
+        </div>
+        <div class="arrow">+</div>
+        <div class="card">
+          <div class="card-tag">JSONL</div>
+          <span class="card-icon">🌊</span>
+          <div class="card-title">drift_cases.jsonl</div>
+          <div class="card-sub">150 cases<br>5 drift types</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">PY</div>
+          <span class="card-icon">📊</span>
+          <div class="card-title">evaluator.py</div>
+          <div class="card-sub">Precision / Recall<br>HS recall, latency</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-tag">LOG</div>
+          <span class="card-icon">📜</span>
+          <div class="card-title">metrics_logger.py</div>
+          <div class="card-sub">eval_log.jsonl<br>timestamped runs</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector-row">
+      <div></div>
+      <div class="connector-line"><span class="connector-text">eval_log.jsonl → dashboard tabs → live tester</span></div>
+    </div>
+
+    <!-- Layer 5: Dashboard -->
+    <div class="layer-row layer-dash">
+      <div class="layer-label" style="position:relative">
+        <div class="layer-name">Dashboard</div>
+        <div class="layer-num">Layer 05</div>
+      </div>
+      <div class="layer-content">
+        <div class="card">
+          <div class="card-tag">TAB</div>
+          <span class="card-icon">📈</span>
+          <div class="card-title">Metrics Dashboard</div>
+          <div class="card-sub">Gold results<br>version compare</div>
+        </div>
+        <div class="arrow">|</div>
+        <div class="card">
+          <div class="card-tag">TAB</div>
+          <span class="card-icon">🌊</span>
+          <div class="card-title">Drift Monitor</div>
+          <div class="card-sub">Recall drop<br>bar charts</div>
+        </div>
+        <div class="arrow">|</div>
+        <div class="card">
+          <div class="card-tag">TAB</div>
+          <span class="card-icon">🗂️</span>
+          <div class="card-title">Taxonomy</div>
+          <div class="card-sub">Filterable<br>violation table</div>
+        </div>
+        <div class="arrow">|</div>
+        <div class="card">
+          <div class="card-tag">TAB</div>
+          <span class="card-icon">🔍</span>
+          <div class="card-title">Live Tester</div>
+          <div class="card-sub">Real-time classify<br>any prompt version</div>
+        </div>
+        <div class="arrow">|</div>
+        <div class="card">
+          <div class="card-tag">TAB</div>
+          <span class="card-icon">🏗️</span>
+          <div class="card-title">Architecture</div>
+          <div class="card-sub">System layers<br>production design</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .arch -->
+
+  <!-- Data flows -->
+  <div class="bottom-section">
+    <div class="flow-panel">
+      <div class="flow-title">Inference Path</div>
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>Content input</strong> arrives via Live Tester or evaluator batch run</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>PromptBuilder</strong> injects content into selected version template</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-text"><strong>LLMClient</strong> calls Anthropic API — temperature=0, retry on 429/529</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-text"><strong>Agent</strong> parses JSON output — parse failure → escalate_review default</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-text"><strong>AgentOutput</strong> returned with label, severity, enforcement, rationale</div>
+      </div>
+    </div>
+
+    <div class="flow-panel">
+      <div class="flow-title">Evaluation Path</div>
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>Evaluator</strong> loads gold or drift JSONL dataset (300 / 150 cases)</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>Agent.classify()</strong> called per case — 0.3s throttle between calls</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-text"><strong>Metrics</strong> computed — precision, recall, F1, HS recall, p50/p95 latency</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-text"><strong>MetricsLogger</strong> appends run to eval_log.jsonl with ISO-8601 timestamp</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-text"><strong>Dashboard</strong> reads log — gold vs drift recall drop surfaced per version</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key metrics -->
+  <div class="metrics-strip">
+    <div class="metric-cell">
+      <div class="metric-value" style="color:var(--accent-gold)">1.000</div>
+      <div class="metric-label">Precision (all)</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value" style="color:var(--accent-green)">1.000</div>
+      <div class="metric-label">HS Recall v3 drift</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value" style="color:var(--accent-orange)">0</div>
+      <div class="metric-label">HS False Negatives</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value" style="color:var(--accent-blue)">0</div>
+      <div class="metric-label">Parse Errors</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value" style="color:var(--accent-teal)">&lt;2s</div>
+      <div class="metric-label">p95 Latency</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
