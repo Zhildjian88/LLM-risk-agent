@@ -1,0 +1,12 @@
+# Force GitHub to treat this as a Python project
+
+# Ignore frontend/static files for language stats
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.js linguist-detectable=false
+
+# Ignore notebooks from language stats (optional)
+*.ipynb linguist-detectable=false
+
+# Ensure Python is counted
+*.py linguist-detectable=true
